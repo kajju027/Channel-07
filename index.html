@@ -1,244 +1,63 @@
-<!doctype html>
-
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Aurgent plyr</title>  <!-- Plyr CSS -->  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.css" />  <style>
-    /* Page reset: only the player on the page */
-    html,body{height:100%;margin:0;background:#000;}
-    .player-wrap{
-      height:100vh; /* full-screen height */
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding:12px;
-      box-sizing:border-box;
+  <meta charset="UTF-8">
+  <title>Smooth Video Player</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: #191919;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    /* Make the video responsive and mobile-first */
-    .plyr__video-embed, .plyr,
-    video{
-      width:100%;
-      max-width:1100px; /* reasonable max on large screens */
-      height:calc(min(60vh, 620px));
-      border-radius:10px;
-      overflow:hidden;
-      box-shadow:0 8px 30px rgba(0,0,0,0.6);
+    .plyr--video {
+      border-radius: 8px;
+      max-width: 720px;
+      width: 100vw;
+      box-shadow: 0 8px 40px #000a;
     }
-
-    /* Replace Plyr default blue accents with the requested color (#a8a8a8) */
-    :root{
-      --plyr-color-main: #a8a8a8;
-      --plyr-control-backdrop: rgba(168,168,168,0.06);
-      --plyr-control-icon-active: #a8a8a8;
-      --plyr-control-icon: #a8a8a8;
-      --plyr-range-fill: #a8a8a8;
-      --plyr-range-thumb-background: #a8a8a8;
-      --plyr-time-range-buffer: rgba(168,168,168,0.35);
-    }
-
-    /* Tweak UI sizes for touch friendliness */
-    .plyr__controls{padding:10px 14px;}
-    .plyr__control{min-width:44px;min-height:44px;border-radius:8px}
-    .plyr__menu__container{font-size:15px}
-
-    /* Quality selector stub location (top-right inside player) */
-    .quality-selector{
-      position:absolute;
-      top:12px;
-      right:12px;
-      z-index:999;
-      display:flex;
-      gap:8px;
-      align-items:center;
-    }
-    .quality-btn{
-      background:rgba(0,0,0,0.45);
-      color:#fff;
-      border:1px solid rgba(255,255,255,0.06);
-      padding:6px 8px;
-      border-radius:6px;
-      font-size:13px;
-      backdrop-filter: blur(4px);
-    }
-
-    /* Small screens: make height larger and controls easy to tap */
-    @media (max-width:600px){
-      .plyr, video{height:55vh}
-      .plyr__controls{padding:12px}
-    }
-  </style></head>
+  </style>
+</head>
 <body>
-  <div class="player-wrap"><!-- Video element; only this is on the page -->
-<div style="position:relative;width:100%;max-width:1100px">
   <video id="player" playsinline controls></video>
 
-  <!-- Quality UI (JS will populate) -->
-  <div id="quality" class="quality-selector" aria-hidden="true"></div>
-</div>
+  <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script>
+    const source = "https://rumble.com/live-hls/6z456e/playlist.m3u8";
+    const video = document.getElementById('player');
 
-  </div>  <!-- Dependencies: hls.js then Plyr -->  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.2/dist/hls.min.js"></script>  <script src="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.polyfilled.js"></script>  <script>
-    (function(){
-      const src = 'http://y3fqd48g.megatv.fun/iptv/NRLXRWSBWBPLN4/19146/index.m3u8';
-      const video = document.getElementById('player');
-
-      // Initialize Plyr
-      const player = new Plyr(video, {
-        debug: false,
-        captions: { active: false, language: 'en' },
-        i18n: { "quality": "Quality" },
-        controls: [
-          'play-large',
-          'play',
-          'progress',
-          'current-time',
-          'mute',
-          'volume',
-          'captions',
-          'settings',
-          'pip',
-          'airplay',
-          'fullscreen'
-        ],
-        settings: ['quality','speed','loop'],
-        seekTime: 10,
+    function setDefaultQuality(hls, qualityLabel = '360') {
+      hls.on(Hls.Events.MANIFEST_PARSED, function(_, data) {
+        // Try to find 360p level
+        let levelIndex = data.levels.findIndex(level =>
+          (level.height && level.height === 360) ||
+          (level.name && level.name.includes('360'))
+        );
+        if(levelIndex === -1) levelIndex = 0; // fallback
+        hls.currentLevel = levelIndex;
       });
+    }
 
-      // Simple helper to create quality buttons
-      function createQualityButton(label, value){
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'quality-btn';
-        btn.dataset.quality = value;
-        btn.textContent = label;
-        btn.addEventListener('click', ()=> setQuality(value));
-        return btn;
-      }
+    if (Hls.isSupported()) {
+      const hls = new Hls();
+      hls.loadSource(source);
+      hls.attachMedia(video);
+      setDefaultQuality(hls, '360');
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = source;
+    }
 
-      // Set quality: for HLS we switch level via hls.currentLevel
-      function setQuality(levelIndex){
-        if(window.hls && typeof window.hls.levels !== 'undefined'){
-          if(levelIndex === 'auto'){
-            window.hls.currentLevel = -1; // auto
-            updateQualityUI('AUTO');
-            return;
-          }
-          const idx = Number(levelIndex);
-          if(!Number.isNaN(idx)){
-            // levels are ordered highest->lowest in some manifests; use index directly
-            window.hls.currentLevel = idx;
-            const lbl = window.hls.levels[idx] ? (window.hls.levels[idx].height ? window.hls.levels[idx].height + 'p' : window.hls.levels[idx].name || idx) : idx;
-            updateQualityUI(lbl);
-          }
-        }
-      }
-
-      function updateQualityUI(activeLabel){
-        const container = document.getElementById('quality');
-        container.querySelectorAll('.quality-btn').forEach(b=>{
-          b.style.opacity = (b.textContent === activeLabel || (b.dataset.quality === 'auto' && activeLabel==='AUTO')) ? '1' : '0.65';
-          b.style.outline = (b.textContent === activeLabel || (b.dataset.quality === 'auto' && activeLabel==='AUTO')) ? '2px solid rgba(168,168,168,0.18)' : 'none';
-        });
-      }
-
-      // Attach HLS stream
-      if(Hls.isSupported()){
-        const hls = new Hls({
-          // Optional config: startLevel, maxBufferLength, etc. Customize as needed.
-          capLevelToPlayerSize: true,
-          maxBufferLength: 30,
-        });
-        window.hls = hls; // expose for debugging and quality switching
-        hls.loadSource(src);
-        hls.attachMedia(video);
-
-        hls.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
-          // data.levels is an array of available quality levels
-          const levels = hls.levels || [];
-
-          const qualityContainer = document.getElementById('quality');
-          qualityContainer.innerHTML = '';
-
-          // Auto button
-          const autoBtn = createQualityButton('AUTO', 'auto');
-          qualityContainer.appendChild(autoBtn);
-
-          // Build buttons from levels (show height if available)
-          // We'll list from highest to lowest for nicer UX
-          const indexed = levels.map((l,i)=>({i,height:l.height,bitrate:l.bitrate,name:l.name}));
-          // Some manifests list levels low->high, so sort by height desc if height exists
-          indexed.sort((a,b)=> (b.height||0) - (a.height||0));
-
-          indexed.forEach(item=>{
-            const label = item.height ? (item.height + 'p') : (item.name || item.i);
-            const btn = createQualityButton(label, item.i);
-            qualityContainer.appendChild(btn);
-          });
-
-          // Default to auto
-          updateQualityUI('AUTO');
-
-          // Autoplay the video (some browsers block autoplay without interaction)
-          video.play().catch(()=>{});
-        });
-
-        // Update UI when levels updated (some streams switch availability)
-        hls.on(Hls.Events.LEVEL_SWITCHED, function(event, data){
-          const level = data.level;
-          const lbl = hls.levels[level] ? (hls.levels[level].height ? hls.levels[level].height + 'p' : hls.levels[level].name || level) : level;
-          updateQualityUI(lbl);
-        });
-
-        // handle fatal errors: try to recover
-        hls.on(Hls.Events.ERROR, function(event, data){
-          if(data.fatal){
-            switch(data.type){
-              case Hls.ErrorTypes.NETWORK_ERROR:
-                console.error('Network error encountered, trying to recover...');
-                hls.startLoad();
-                break;
-              case Hls.ErrorTypes.MEDIA_ERROR:
-                console.error('Media error encountered, trying to recover...');
-                hls.recoverMediaError();
-                break;
-              default:
-                console.error('Fatal error - cannot recover', data);
-                hls.destroy();
-                break;
-            }
-          }
-        });
-
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')){
-        // Native HLS (Safari, iOS). Set src directly and let browser handle quality if available.
-        video.src = src;
-        // Provide a simple quality indicator but switching may not be supported natively
-        const qualityContainer = document.getElementById('quality');
-        const autoBtn = createQualityButton('AUTO', 'auto');
-        qualityContainer.appendChild(autoBtn);
-        updateQualityUI('AUTO');
-        video.addEventListener('loadedmetadata', ()=> video.play().catch(()=>{}));
-      } else {
-        // No HLS support
-        const err = document.createElement('div');
-        err.style.color = '#fff';
-        err.style.padding = '18px';
-        err.style.textAlign = 'center';
-        err.textContent = 'Your browser does not support HLS playback. Try a modern mobile or desktop browser.';
-        document.querySelector('.player-wrap').innerHTML = '';
-        document.querySelector('.player-wrap').appendChild(err);
-      }
-
-      // Accessibility: close on Escape should exit fullscreen or pause
-      document.addEventListener('keydown', (e)=>{
-        if(e.key === 'Escape'){
-          player.pause();
-        }
-      });
-
-      // Note about CORS: if the stream disallows cross-origin requests, playback may fail in some browsers.
-      // In that case a CORS-allowing proxy (server-side) is required to serve the manifest and segments.
-
-    })();
-  </script></body>
+    const player = new Plyr(video, {
+      controls: ['play', 'progress', 'current-time', 'mute', 'volume', 'settings', 'fullscreen'],
+      settings: ['quality', 'speed'],
+      ratio: '16:9',
+      i18n: { restart: 'Restart', play: 'Play', pause: 'Pause' }
+    });
+  </script>
+</body>
 </html>
